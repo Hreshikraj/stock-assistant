@@ -6,6 +6,7 @@ import ollama
 from groq import Groq
 import yfinance as yf
 from dotenv import load_dotenv
+from fastembed import TextEmbedding
 
 load_dotenv()
 api_key = os.getenv("NEWSAPI_KEY")
@@ -24,21 +25,24 @@ def fetch_news(query, page_size=10):
     return data.get("articles", [])
 
 
+_embedding_model = TextEmbedding()  # loads once, reused for every call
+
 def get_embedding(text):
-    response = ollama.embeddings(model="nomic-embed-text", prompt=text)
-    return np.array(response["embedding"])
+    embedding = list(_embedding_model.embed([text]))[0]
+    return np.array(embedding)
 
 
 def get_stock_summary(ticker):
-    t = yf.Ticker(ticker)
-    info = t.fast_info
-    last_price = info.last_price
-    previous_close = info.previous_close
-    pct_change = ((last_price - previous_close) / previous_close) * 100
-    direction = "up" if pct_change >= 0 else "down"
-    return f"{ticker} is currently trading at {last_price:.2f}, {direction} {abs(pct_change):.2f}% from previous close of {previous_close:.2f}."
-
-
+    try:
+        t = yf.Ticker(ticker)
+        info = t.fast_info
+        last_price = info.last_price
+        previous_close = info.previous_close
+        pct_change = ((last_price - previous_close) / previous_close) * 100
+        direction = "up" if pct_change >= 0 else "down"
+        return f"{ticker} is currently trading at {last_price:.2f}, {direction} {abs(pct_change):.2f}% from previous close of {previous_close:.2f}."
+    except Exception as e:
+        return f"Live price data for {ticker} is temporarily unavailable ({e}). Continuing with news-based analysis only."
 def cosine_similarity(vec1, vec2):
     return np.dot(vec1, vec2) / (np.linalg.norm(vec1) * np.linalg.norm(vec2))
 
