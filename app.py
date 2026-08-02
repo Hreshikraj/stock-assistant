@@ -7,6 +7,13 @@ from groq import Groq
 import yfinance as yf
 from dotenv import load_dotenv
 from fastembed import TextEmbedding
+import streamlit as st
+
+# On Streamlit Cloud, secrets come from st.secrets, not the local .env file.
+# This bridges them into os.environ so os.getenv(...) works the same either way.
+for key in ["NEWSAPI_KEY", "GROQ_API_KEY", "LLM_PROVIDER"]:
+    if key in st.secrets:
+        os.environ[key] = st.secrets[key]
 
 load_dotenv()
 api_key = os.getenv("NEWSAPI_KEY")
