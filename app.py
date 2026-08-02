@@ -3,6 +3,7 @@ import requests
 import os
 import numpy as np
 import ollama
+from groq import Groq
 import yfinance as yf
 from dotenv import load_dotenv
 
@@ -71,10 +72,20 @@ Recent news headlines relevant to {ticker}:
 Based on this data and these headlines, answer the question: {question}
 Keep your answer to 3-4 sentences, and don't make up information not given above.
 """
-    response = ollama.chat(model="llama3.1", messages=[{"role": "user", "content": prompt}])
-    return stock_summary, top_articles, response["message"]["content"]
+    llm_provider = os.getenv("LLM_PROVIDER", "ollama")
 
+    if llm_provider == "groq":
+        client = Groq(api_key=os.getenv("GROQ_API_KEY"))
+        response = client.chat.completions.create(
+            model="llama-3.1-8b-instant",
+            messages=[{"role": "user", "content": prompt}]
+        )
+        answer = response.choices[0].message.content
+    else:
+        response = ollama.chat(model="llama3.1", messages=[{"role": "user", "content": prompt}])
+        answer = response["message"]["content"]
 
+    return stock_summary, top_articles, answer
 # --- UI ---
 
 st.title("📈 AI Stock & Finance Assistant")
