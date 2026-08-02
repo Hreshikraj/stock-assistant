@@ -5,3 +5,5 @@ yfinance
 python-dotenv
 groq
 fastembed
+crewai
+litellm

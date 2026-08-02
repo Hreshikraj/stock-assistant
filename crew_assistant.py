@@ -1,22 +1,12 @@
-import streamlit as st
 import os
-import numpy as np
-import requests
-import yfinance as yf
-from fastembed import TextEmbedding
 from dotenv import load_dotenv
 from crewai import Agent, Task, Crew, Process
 from crewai.llm import LLM
+import yfinance as yf
+import requests
+import numpy as np
+from fastembed import TextEmbedding
 
-# Bridge Streamlit Cloud secrets into environment variables.
-# Locally there's no secrets.toml file at all, so st.secrets access
-# itself can raise — that's expected, we just fall back to .env there.
-try:
-    for key in ["NEWSAPI_KEY", "GROQ_API_KEY", "LLM_PROVIDER"]:
-        if key in st.secrets:
-            os.environ[key] = st.secrets[key]
-except Exception:
-    pass  # no Streamlit Cloud secrets available locally — that's fine, .env covers it
 load_dotenv()
 
 api_key = os.getenv("NEWSAPI_KEY")
@@ -25,6 +15,27 @@ _embedding_model = TextEmbedding()
 llm = LLM(
     model="groq/llama-3.1-8b-instant",
     api_key=os.getenv("GROQ_API_KEY"),
+)
+
+market_analyst = Agent(
+    role="Market Analyst",
+    goal="Report on current stock price and trend, based only on data given",
+    backstory="A precise financial analyst who only reports verified numbers, never guesses.",
+    llm=llm,
+)
+
+news_analyst = Agent(
+    role="News Analyst",
+    goal="Summarize relevant news headlines and their likely impact on the stock",
+    backstory="A financial journalist who identifies the most relevant news and explains its significance.",
+    llm=llm,
+)
+
+advisor = Agent(
+    role="Financial Advisor",
+    goal="Combine market data and news into one clear, balanced answer for the user",
+    backstory="An advisor who synthesizes information clearly and always includes a brief disclaimer that this isn't financial advice.",
+    llm=llm,
 )
 
 
@@ -67,35 +78,13 @@ def get_top_news(question, ticker, top_n=3):
         score = cosine_similarity(question_vec, get_embedding(text))
         scored.append((score, article))
     scored.sort(key=lambda x: x[0], reverse=True)
-    return [(s, a) for s, a in scored[:top_n]]
+    return [a["title"] for _, a in scored[:top_n]]
 
 
-market_analyst = Agent(
-    role="Market Analyst",
-    goal="Report on current stock price and trend, based only on data given",
-    backstory="A precise financial analyst who only reports verified numbers, never guesses.",
-    llm=llm,
-)
-
-news_analyst = Agent(
-    role="News Analyst",
-    goal="Summarize relevant news headlines and their likely impact on the stock",
-    backstory="A financial journalist who identifies the most relevant news and explains its significance.",
-    llm=llm,
-)
-
-advisor = Agent(
-    role="Financial Advisor",
-    goal="Combine market data and news into one clear, balanced answer for the user",
-    backstory="An advisor who synthesizes information clearly and always includes a brief disclaimer that this isn't financial advice.",
-    llm=llm,
-)
-
-
-def run_assistant(ticker, question):
+def build_crew(ticker, question):
     stock_summary = get_stock_summary(ticker)
-    top_articles = get_top_news(question, ticker)
-    headlines_text = "\n".join([f"- {a['title']}" for _, a in top_articles])
+    top_headlines = get_top_news(question, ticker)
+    headlines_text = "\n".join([f"- {h}" for h in top_headlines])
 
     market_task = Task(
         description=f"Here is the current market data for {ticker}:\n{stock_summary}\n"
@@ -121,34 +110,15 @@ def run_assistant(ticker, question):
         context=[market_task, news_task],
     )
 
-    crew = Crew(
+    return Crew(
         agents=[market_analyst, news_analyst, advisor],
         tasks=[market_task, news_task, advisor_task],
         process=Process.sequential,
     )
 
+
+if __name__ == "__main__":
+    crew = build_crew("AAPL", "Why did this stock move this week?")
     result = crew.kickoff()
-    return stock_summary, top_articles, str(result)
-
-
-# --- UI ---
-
-st.title("📈 AI Stock & Finance Assistant")
-st.caption("Multi-agent assistant (CrewAI) grounded in live price data and real news.")
-
-ticker = st.text_input("Ticker symbol", value="AAPL")
-question = st.text_input("Your question", value="Why did this stock move this week?")
-
-if st.button("Ask"):
-    with st.spinner("Agents are researching (market + news + synthesis)..."):
-        stock_summary, top_articles, answer = run_assistant(ticker, question)
-
-    st.subheader("Market Data")
-    st.write(stock_summary)
-
-    st.subheader("Relevant News")
-    for score, article in top_articles:
-        st.write(f"**{article['title']}** (relevance: {score:.2f})")
-
-    st.subheader("AI Answer")
-    st.write(answer)
+    print("\n--- FINAL ANSWER ---")
+    print(result)
