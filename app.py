@@ -26,6 +26,11 @@ llm = LLM(
     model="groq/llama-3.1-8b-instant",
     api_key=os.getenv("GROQ_API_KEY"),
 )
+# Workaround for CrewAI bug #5886: cache_breakpoint field gets injected
+# into messages for non-Anthropic providers (like Groq), which those
+# APIs reject as an unrecognized field. This disables that injection.
+import crewai.llms.cache as _crewai_cache
+_crewai_cache.mark_cache_breakpoint = lambda msg: msg
 
 
 def get_stock_summary(ticker):
