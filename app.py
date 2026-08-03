@@ -141,8 +141,11 @@ question = st.text_input("Your question", value="Why did this stock move this we
 
 if st.button("Ask"):
     with st.spinner("Agents are researching (market + news + synthesis)..."):
-        stock_summary, top_articles, answer = run_assistant(ticker, question)
-
+        try:
+            stock_summary, top_articles, answer = run_assistant(ticker, question)
+        except Exception as e:
+            st.error(f"Something went wrong: {e}")
+            st.stop()
     st.subheader("Market Data")
     st.write(stock_summary)
 
