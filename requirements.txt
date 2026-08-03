@@ -7,4 +7,3 @@ groq
 fastembed
 crewai
 litellm
-chromadb<0.6
